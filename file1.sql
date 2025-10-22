@@ -1,1 +1,2 @@
 CREATE DATABASE DB_Prog
+use DB_Prog
