@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎬 My Favorite Movies</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 My Favorite Movies</h1>
+            <p>Keep track of movies you love!</p>
+        </header>
+
+        <div class="form-container">
+            <h2>Add a New Movie</h2>
+            <form id="movieForm">
+                <div class="form-group">
+                    <label for="userName">👤 Your Name</label>
+                    <input type="text" id="userName" name="userName" placeholder="Enter your name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="movieName">🎬 Movie Name</label>
+                    <input type="text" id="movieName" name="movieName" placeholder="Enter movie name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="genre">🎭 Genre</label>
+                    <select id="genre" name="genre" required>
+                        <option value="">Select a genre</option>
+                        <option value="Action">Action</option>
+                        <option value="Comedy">Comedy</option>
+                        <option value="Drama">Drama</option>
+                        <option value="Horror">Horror</option>
+                        <option value="Sci-Fi">Sci-Fi</option>
+                        <option value="Romance">Romance</option>
+                        <option value="Thriller">Thriller</option>
+                        <option value="Animation">Animation</option>
+                        <option value="Documentary">Documentary</option>
+                        <option value="Fantasy">Fantasy</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="rating">⭐ Rating (1-10)</label>
+                    <input type="number" id="rating" name="rating" min="1" max="10" placeholder="Rate from 1 to 10" required>
+                </div>
+
+                <button type="submit" class="btn-submit">
+                    <span>➕ Add Movie</span>
+                </button>
+            </form>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <div class="movies-container">
+            <h2>🎞️ Your Movie Collection</h2>
+            <div id="moviesList" class="movies-list">
+                <div class="loading">Loading movies...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
