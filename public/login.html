@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎬 Movie App - Login</title>
+    <link rel="stylesheet" href="auth-style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-box">
+            <h1>🎬 Movie Collection</h1>
+            
+            <!-- Login Form -->
+            <div id="loginForm" class="form-section active">
+                <h2>Welcome Back!</h2>
+                <form id="loginFormElement">
+                    <div class="form-group">
+                        <label for="loginEmail">📧 Email</label>
+                        <input type="email" id="loginEmail" name="email" placeholder="Enter your email" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="loginUsername">👤 Username</label>
+                        <input type="text" id="loginUsername" name="username" placeholder="Enter your username" required>
+                    </div>
+
+                    <button type="submit" class="btn-primary">
+                        🔓 Login
+                    </button>
+                </form>
+                
+                <p class="switch-form">
+                    Don't have an account? 
+                    <a href="#" onclick="switchToRegister()">Register here</a>
+                </p>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="form-section">
+                <h2>Create Account</h2>
+                <form id="registerFormElement">
+                    <div class="form-group">
+                        <label for="registerUsername">👤 Username</label>
+                        <input type="text" id="registerUsername" name="username" placeholder="Choose a username" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="registerEmail">📧 Email</label>
+                        <input type="email" id="registerEmail" name="email" placeholder="Enter your email" required>
+                    </div>
+
+                    <button type="submit" class="btn-primary">
+                        ✨ Create Account
+                    </button>
+                </form>
+                
+                <p class="switch-form">
+                    Already have an account? 
+                    <a href="#" onclick="switchToLogin()">Login here</a>
+                </p>
+            </div>
+
+            <div id="message" class="message"></div>
+        </div>
+    </div>
+
+    <script src="auth-script.js"></script>
+</body>
+</html>
