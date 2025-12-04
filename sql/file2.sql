@@ -271,3 +271,307 @@ RETURN
         popularity_rank_index ASC -- Tiebreaker: Prioritize more niche/low index films
 );
 GO
+
+
+-- ==============================================================================
+-- ANALYTICAL QUERIES SECTION
+-- 12+ SELECT Queries with at least 4 queries across multiple tables
+-- ==============================================================================
+
+--------------------------------------------------------------------------------
+-- QUERY 1: Get all movies rated above 8
+--------------------------------------------------------------------------------
+SELECT 
+    asset_id,
+    title,
+    release_year,
+    budget_level,
+    runtime_minutes
+FROM 
+    MediaAsset
+WHERE 
+    media_type = 'Movie'
+    AND asset_id IN (
+        SELECT asset_id 
+        FROM ViewingLog 
+        WHERE critical_rating >= 8
+    );
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 2: Find all active viewers with their total viewing count (JOIN - Multiple Tables)
+--------------------------------------------------------------------------------
+SELECT 
+    V.viewer_id,
+    V.username,
+    V.email,
+    V.niche_affinity_score,
+    COUNT(VL.log_id) AS TotalViewings,
+    AVG(CAST(VL.critical_rating AS DECIMAL(4, 2))) AS AvgRating
+FROM 
+    Viewer V
+LEFT JOIN 
+    ViewingLog VL ON V.viewer_id = VL.viewer_id
+WHERE 
+    V.is_active = 1
+GROUP BY 
+    V.viewer_id, V.username, V.email, V.niche_affinity_score;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 3: List all movies by Christopher Nolan (JOIN - Multiple Tables)
+--------------------------------------------------------------------------------
+SELECT 
+    MA.asset_id,
+    MA.title,
+    MA.release_year,
+    CM.full_name AS DirectorName,
+    CR.role_name
+FROM 
+    MediaAsset MA
+JOIN 
+    CrewCredit CC ON MA.asset_id = CC.asset_id
+JOIN 
+    CrewMember CM ON CC.crew_id = CM.crew_id
+JOIN 
+    CrewRole CR ON CC.role_id = CR.role_id
+WHERE 
+    CM.full_name = 'Christopher Nolan'
+    AND CR.category = 'Direction';
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 4: Average ratings by budget level (JOIN - Multiple Tables)
+--------------------------------------------------------------------------------
+SELECT 
+    MA.budget_level,
+    COUNT(DISTINCT MA.asset_id) AS TotalMovies,
+    AVG(CAST(VL.critical_rating AS DECIMAL(4, 2))) AS AvgRating,
+    AVG(CAST(VL.complexity_score AS DECIMAL(4, 2))) AS AvgComplexity
+FROM 
+    MediaAsset MA
+JOIN 
+    ViewingLog VL ON MA.asset_id = VL.asset_id
+GROUP BY 
+    MA.budget_level
+ORDER BY 
+    AvgRating DESC;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 5: Get all expert tags for a specific movie (JOIN - Multiple Tables)
+--------------------------------------------------------------------------------
+SELECT 
+    MA.title,
+    ET.tag_name,
+    ET.tag_definition,
+    AVG(CAST(VTV.agreement_intensity AS DECIMAL(4, 2))) AS AvgAgreementIntensity,
+    COUNT(VTV.viewer_id) AS TotalValidations
+FROM 
+    MediaAsset MA
+JOIN 
+    ViewerTagValidation VTV ON MA.asset_id = VTV.asset_id
+JOIN 
+    ExpertTag ET ON VTV.tag_id = ET.tag_id
+WHERE 
+    MA.title = 'The Lighthouse'
+GROUP BY 
+    MA.title, ET.tag_name, ET.tag_definition;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 6: Find viewers who rated indie movies highly
+--------------------------------------------------------------------------------
+SELECT 
+    V.viewer_id,
+    V.username,
+    COUNT(VL.log_id) AS IndieMoviesWatched,
+    AVG(CAST(VL.critical_rating AS DECIMAL(4, 2))) AS AvgIndieRating
+FROM 
+    Viewer V
+JOIN 
+    ViewingLog VL ON V.viewer_id = VL.viewer_id
+JOIN 
+    MediaAsset MA ON VL.asset_id = MA.asset_id
+WHERE 
+    MA.budget_level = 'Indie'
+GROUP BY 
+    V.viewer_id, V.username
+HAVING 
+    AVG(CAST(VL.critical_rating AS DECIMAL(4, 2))) >= 8;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 7: Get most popular expert tags across all movies
+--------------------------------------------------------------------------------
+SELECT 
+    ET.tag_id,
+    ET.tag_name,
+    ET.category,
+    COUNT(VTV.viewer_id) AS TotalValidations,
+    AVG(CAST(VTV.agreement_intensity AS DECIMAL(4, 2))) AS AvgIntensity
+FROM 
+    ExpertTag ET
+JOIN 
+    ViewerTagValidation VTV ON ET.tag_id = VTV.tag_id
+GROUP BY 
+    ET.tag_id, ET.tag_name, ET.category
+ORDER BY 
+    TotalValidations DESC;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 8: List all crew members and their primary roles
+--------------------------------------------------------------------------------
+SELECT 
+    CM.crew_id,
+    CM.full_name,
+    CM.primary_role,
+    COUNT(DISTINCT CC.asset_id) AS TotalProjects,
+    STRING_AGG(CR.role_name, ', ') AS AllRoles
+FROM 
+    CrewMember CM
+LEFT JOIN 
+    CrewCredit CC ON CM.crew_id = CC.crew_id
+LEFT JOIN 
+    CrewRole CR ON CC.role_id = CR.role_id
+GROUP BY 
+    CM.crew_id, CM.full_name, CM.primary_role;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 9: Find movies released after 2015 with high complexity scores
+--------------------------------------------------------------------------------
+SELECT 
+    MA.asset_id,
+    MA.title,
+    MA.release_year,
+    AVG(CAST(VL.complexity_score AS DECIMAL(4, 2))) AS AvgComplexity,
+    AVG(CAST(VL.critical_rating AS DECIMAL(4, 2))) AS AvgRating,
+    COUNT(VL.viewer_id) AS TotalViewers
+FROM 
+    MediaAsset MA
+JOIN 
+    ViewingLog VL ON MA.asset_id = VL.asset_id
+WHERE 
+    MA.release_year >= 2015
+GROUP BY 
+    MA.asset_id, MA.title, MA.release_year
+HAVING 
+    AVG(CAST(VL.complexity_score AS DECIMAL(4, 2))) >= 4
+ORDER BY 
+    AvgComplexity DESC;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 10: Get viewer engagement by join year
+--------------------------------------------------------------------------------
+SELECT 
+    YEAR(V.joined_date) AS JoinYear,
+    COUNT(V.viewer_id) AS TotalViewers,
+    AVG(V.niche_affinity_score) AS AvgNicheScore,
+    SUM(CASE WHEN VL.viewer_id IS NOT NULL THEN 1 ELSE 0 END) AS ActiveViewers
+FROM 
+    Viewer V
+LEFT JOIN 
+    ViewingLog VL ON V.viewer_id = VL.viewer_id
+GROUP BY 
+    YEAR(V.joined_date)
+ORDER BY 
+    JoinYear DESC;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 11: Find all acting roles in blockbuster movies (JOIN - Multiple Tables)
+--------------------------------------------------------------------------------
+SELECT 
+    MA.title,
+    CM.full_name AS ActorName,
+    CR.role_name,
+    MA.release_year,
+    MA.budget_level
+FROM 
+    MediaAsset MA
+JOIN 
+    CrewCredit CC ON MA.asset_id = CC.asset_id
+JOIN 
+    CrewMember CM ON CC.crew_id = CM.crew_id
+JOIN 
+    CrewRole CR ON CC.role_id = CR.role_id
+WHERE 
+    MA.budget_level = 'Blockbuster'
+    AND CR.category = 'Acting'
+ORDER BY 
+    MA.release_year DESC;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 12: Get detailed viewer profile with statistics (JOIN - Multiple Tables)
+--------------------------------------------------------------------------------
+SELECT 
+    V.viewer_id,
+    V.username,
+    V.email,
+    V.niche_affinity_score,
+    COUNT(DISTINCT VL.asset_id) AS UniqueMoviesWatched,
+    AVG(CAST(VL.critical_rating AS DECIMAL(4, 2))) AS AvgRating,
+    AVG(CAST(VL.complexity_score AS DECIMAL(4, 2))) AS AvgComplexityPreference,
+    COUNT(DISTINCT VTV.tag_id) AS UniqueTagsValidated,
+    MAX(VL.rating_timestamp) AS LastActivityDate
+FROM 
+    Viewer V
+LEFT JOIN 
+    ViewingLog VL ON V.viewer_id = VL.viewer_id
+LEFT JOIN 
+    ViewerTagValidation VTV ON V.viewer_id = VTV.viewer_id
+WHERE 
+    V.is_active = 1
+GROUP BY 
+    V.viewer_id, V.username, V.email, V.niche_affinity_score;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 13: Movies with the most tag validations (JOIN - Multiple Tables)
+--------------------------------------------------------------------------------
+SELECT 
+    MA.asset_id,
+    MA.title,
+    MA.release_year,
+    MA.budget_level,
+    COUNT(DISTINCT VTV.tag_id) AS UniqueTags,
+    COUNT(VTV.viewer_id) AS TotalValidations,
+    AVG(CAST(VTV.agreement_intensity AS DECIMAL(4, 2))) AS AvgIntensity
+FROM 
+    MediaAsset MA
+JOIN 
+    ViewerTagValidation VTV ON MA.asset_id = VTV.asset_id
+GROUP BY 
+    MA.asset_id, MA.title, MA.release_year, MA.budget_level
+ORDER BY 
+    TotalValidations DESC;
+GO
+
+--------------------------------------------------------------------------------
+-- QUERY 14: Find crew members who work across multiple budget levels
+--------------------------------------------------------------------------------
+SELECT 
+    CM.crew_id,
+    CM.full_name,
+    CM.primary_role,
+    COUNT(DISTINCT MA.budget_level) AS BudgetLevelsDiversity,
+    STRING_AGG(DISTINCT MA.budget_level, ', ') AS BudgetLevels,
+    COUNT(DISTINCT CC.asset_id) AS TotalProjects
+FROM 
+    CrewMember CM
+JOIN 
+    CrewCredit CC ON CM.crew_id = CC.crew_id
+JOIN 
+    MediaAsset MA ON CC.asset_id = MA.asset_id
+GROUP BY 
+    CM.crew_id, CM.full_name, CM.primary_role
+HAVING 
+    COUNT(DISTINCT MA.budget_level) > 1
+ORDER BY 
+    BudgetLevelsDiversity DESC;
+GO
+-- End of sql/file2.sql
