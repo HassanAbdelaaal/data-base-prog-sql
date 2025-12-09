@@ -52,7 +52,149 @@ BEGIN
 END
 GO
 
+ALTER PROCEDURE usp_CalculateNicheAffinity
+AS
+BEGIN
+    SET NOCOUNT ON;
 
+    -- 1. Calculate the weighted score for each viewer
+    WITH ViewerScores AS (
+        SELECT
+            V.viewer_id,
+            -- FIX: Force intermediate calculation to DECIMAL(10, 4) to preserve precision 
+            -- during aggregation (SUM) and division (AVG).
+            SUM(
+                -- Critical Rating (1-10)
+                CAST(L.critical_rating AS DECIMAL(10, 4)) 
+                * -- Niche Multiplier (Index/100, e.g., 95/100 = 0.95)
+                (CAST(A.popularity_rank_index AS DECIMAL(10, 4)) / 100.0)
+            ) AS TotalWeightedScore,
+            COUNT(L.log_id) AS TotalLogs
+        FROM 
+            Viewer V
+        JOIN 
+            ViewingLog L ON V.viewer_id = L.viewer_id
+        JOIN 
+            MediaAsset A ON L.asset_id = A.asset_id
+        GROUP BY 
+            V.viewer_id
+    )
+    -- 2. Update the Viewer table with the new calculated score
+    UPDATE V
+    SET V.niche_affinity_score = 
+        CASE
+            WHEN S.TotalLogs > 0 THEN 
+                -- Calculate Average Weighted Score, then multiply by 2.0 to scale the max to ~20.00
+                (S.TotalWeightedScore / CAST(S.TotalLogs AS DECIMAL(10, 4))) * 2.0 
+            ELSE 
+                0.00
+        END
+    FROM 
+        Viewer V
+    JOIN 
+        ViewerScores S ON V.viewer_id = S.viewer_id;
+
+END
+GO
+
+IF OBJECT_ID('usp_CalculateNicheAffinity') IS NOT NULL
+    DROP PROCEDURE usp_CalculateNicheAffinity;
+GO
+
+CREATE PROCEDURE usp_CalculateNicheAffinity
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Calculate the weighted score for each viewer
+    WITH ViewerScores AS (
+        SELECT
+            V.viewer_id,
+            -- FIX: Force intermediate calculation to DECIMAL(10, 4) to preserve precision 
+            -- during aggregation (SUM) and division (AVG).
+            SUM(
+                -- Critical Rating (1-10)
+                CAST(L.critical_rating AS DECIMAL(10, 4)) 
+                * -- Niche Multiplier (Index/100, e.g., 95/100 = 0.95)
+                (CAST(A.popularity_rank_index AS DECIMAL(10, 4)) / 100.0)
+            ) AS TotalWeightedScore,
+            COUNT(L.log_id) AS TotalLogs
+        FROM 
+            Viewer V
+        JOIN 
+            ViewingLog L ON V.viewer_id = L.viewer_id
+        JOIN 
+            MediaAsset A ON L.asset_id = A.asset_id
+        GROUP BY 
+            V.viewer_id
+    )
+    -- 2. Update the Viewer table with the new calculated score
+    UPDATE V
+    SET V.niche_affinity_score = 
+        CASE
+            WHEN S.TotalLogs > 0 THEN 
+                -- Calculate Average Weighted Score, then multiply by 2.0 to scale the max to ~20.00
+                -- The result is implicitly cast to DECIMAL(4, 2) when written to the Viewer table.
+                (S.TotalWeightedScore / CAST(S.TotalLogs AS DECIMAL(10, 4))) * 2.0 
+            ELSE 
+                0.00
+        END
+    FROM 
+        Viewer V
+    JOIN 
+        ViewerScores S ON V.viewer_id = S.viewer_id;
+
+END
+GO
+
+IF OBJECT_ID('usp_CalculateNicheAffinity') IS NOT NULL
+    DROP PROCEDURE usp_CalculateNicheAffinity;
+GO
+
+CREATE PROCEDURE usp_CalculateNicheAffinity
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Calculate the weighted score for each viewer
+    WITH ViewerScores AS (
+        SELECT
+            V.viewer_id,
+            SUM(
+                -- Critical Rating (1-10) -> Primary enjoyment factor
+                CAST(L.critical_rating AS DECIMAL(10, 4)) 
+                * -- Popularity Multiplier (Niche factor: Index / 100.0)
+                (CAST(A.popularity_rank_index AS DECIMAL(10, 4)) / CAST(100.0 AS DECIMAL(10, 4)))
+                -- FIX: Complexity Multiplier (Complexity factor: Score / 5.0)
+                * (CAST(L.complexity_score AS DECIMAL(10, 4)) / CAST(5.0 AS DECIMAL(10, 4)))
+            ) AS TotalWeightedScore,
+            COUNT(L.log_id) AS TotalLogs
+        FROM 
+            Viewer V
+        JOIN 
+            ViewingLog L ON V.viewer_id = L.viewer_id
+        JOIN 
+            MediaAsset A ON L.asset_id = A.asset_id
+        GROUP BY 
+            V.viewer_id
+    )
+    -- 2. Update the Viewer table with the new calculated score
+    UPDATE V
+    SET V.niche_affinity_score = 
+        CASE
+            WHEN S.TotalLogs > 0 THEN 
+                -- Calculate Average Weighted Score, then multiply by 2.0 to scale the max potential score 
+                (S.TotalWeightedScore / CAST(S.TotalLogs AS DECIMAL(10, 4))) * CAST(2.0 AS DECIMAL(10, 4))
+            ELSE 
+                0.00
+        END
+    FROM 
+        Viewer V
+    JOIN 
+        ViewerScores S ON V.viewer_id = S.viewer_id;
+
+END
+GO
 --------------------------------------------------------------------------------
 -- FUNCTION: udf_GetSimilarViewers
 -- Purpose: Finds the top 5 viewers who share the most high-intensity tag validations.
@@ -318,6 +460,50 @@ GROUP BY
     V.viewer_id, V.username, V.email, V.niche_affinity_score;
 GO
 
+WITH ViewerWeightedData AS (
+    SELECT
+        V.viewer_id,
+        (CAST(L.critical_rating AS DECIMAL(10, 4)) 
+            * (CAST(A.popularity_rank_index AS DECIMAL(10, 4)) / CAST(100.0 AS DECIMAL(10, 4)))
+            * (CAST(L.complexity_score AS DECIMAL(10, 4)) / CAST(5.0 AS DECIMAL(10, 4)))
+        ) AS WeightedScorePerLog
+    FROM 
+        Viewer V
+    JOIN 
+        ViewingLog L ON V.viewer_id = L.viewer_id
+    JOIN 
+        MediaAsset A ON L.asset_id = A.asset_id
+),
+CalculatedScores AS (
+    SELECT
+        viewer_id,
+        (AVG(WeightedScorePerLog) * CAST(2.0 AS DECIMAL(10, 4))) AS CalculatedNicheAffinity
+    FROM 
+        ViewerWeightedData
+    GROUP BY 
+        viewer_id
+)
+SELECT 
+    V.viewer_id,
+    V.username,
+    V.email,
+    -- Live calculated score replaces the stored column reference
+    ISNULL(CS.CalculatedNicheAffinity, 0.00) AS niche_affinity_score, 
+    COUNT(VL.log_id) AS TotalViewings,
+    AVG(CAST(VL.critical_rating AS DECIMAL(4, 2))) AS AvgRating
+FROM 
+    Viewer V
+LEFT JOIN 
+    ViewingLog VL ON V.viewer_id = VL.viewer_id
+LEFT JOIN
+    CalculatedScores CS ON V.viewer_id = CS.viewer_id
+WHERE 
+    V.is_active = 1
+GROUP BY 
+    V.viewer_id, V.username, V.email, ISNULL(CS.CalculatedNicheAffinity, 0.00)
+ORDER BY 
+    V.viewer_id;
+GO
 --------------------------------------------------------------------------------
 -- QUERY 3: List all movies by Christopher Nolan (JOIN - Multiple Tables)
 --------------------------------------------------------------------------------
@@ -407,7 +593,7 @@ GO
 SELECT 
     ET.tag_id,
     ET.tag_name,
-    ET.category,
+    ET.tag_definition,
     COUNT(VTV.viewer_id) AS TotalValidations,
     AVG(CAST(VTV.agreement_intensity AS DECIMAL(4, 2))) AS AvgIntensity
 FROM 
@@ -415,7 +601,7 @@ FROM
 JOIN 
     ViewerTagValidation VTV ON ET.tag_id = VTV.tag_id
 GROUP BY 
-    ET.tag_id, ET.tag_name, ET.category
+    ET.tag_id, ET.tag_name, ET.tag_definition
 ORDER BY 
     TotalValidations DESC;
 GO
@@ -481,6 +667,50 @@ ORDER BY
     JoinYear DESC;
 GO
 
+WITH ViewerWeightedData AS (
+    -- Calculate the weighted score for every single viewing log entry
+    SELECT
+        V.viewer_id,
+        (CAST(L.critical_rating AS DECIMAL(10, 4)) 
+            * (CAST(A.popularity_rank_index AS DECIMAL(10, 4)) / CAST(100.0 AS DECIMAL(10, 4)))
+            * (CAST(L.complexity_score AS DECIMAL(10, 4)) / CAST(5.0 AS DECIMAL(10, 4)))
+        ) AS WeightedScorePerLog
+    FROM 
+        Viewer V
+    JOIN 
+        ViewingLog L ON V.viewer_id = L.viewer_id
+    JOIN 
+        MediaAsset A ON L.asset_id = A.asset_id
+),
+CalculatedScores AS (
+    -- Calculate the final Niche Affinity Score for each viewer by averaging their weighted logs
+    SELECT
+        viewer_id,
+        -- Scale the final average by 2.0 to match the original scoring range
+        (AVG(WeightedScorePerLog) * CAST(2.0 AS DECIMAL(10, 4))) AS CalculatedNicheAffinity
+    FROM 
+        ViewerWeightedData
+    GROUP BY 
+        viewer_id
+)
+SELECT 
+    YEAR(V.joined_date) AS JoinYear,
+    COUNT(V.viewer_id) AS TotalViewers,
+    -- Use the live calculated score from the CTE
+    AVG(CS.CalculatedNicheAffinity) AS AvgNicheScore,
+    -- Count distinct viewers who have at least one viewing log
+    COUNT(DISTINCT VL.viewer_id) AS ActiveViewers
+FROM 
+    Viewer V
+LEFT JOIN 
+    ViewingLog VL ON V.viewer_id = VL.viewer_id
+LEFT JOIN
+    CalculatedScores CS ON V.viewer_id = CS.viewer_id
+GROUP BY 
+    YEAR(V.joined_date)
+ORDER BY 
+    JoinYear DESC;
+GO
 --------------------------------------------------------------------------------
 -- QUERY 11: Find all acting roles in blockbuster movies (JOIN - Multiple Tables)
 --------------------------------------------------------------------------------
@@ -573,5 +803,181 @@ HAVING
     COUNT(DISTINCT MA.budget_level) > 1
 ORDER BY 
     BudgetLevelsDiversity DESC;
+GO
+--------------------------------------------------------------------------------
+--QUERY 15: Personalized 'next watch' recommendations for all active viewers
+--------------------------------------------------------------------------------
+WITH ViewerWeightedData AS (
+    -- Standard calculation for individual log weights
+    SELECT
+        V.viewer_id,
+        (CAST(L.critical_rating AS DECIMAL(10, 4)) 
+            * (CAST(A.popularity_rank_index AS DECIMAL(10, 4)) / CAST(100.0 AS DECIMAL(10, 4)))
+            * (CAST(L.complexity_score AS DECIMAL(10, 4)) / CAST(5.0 AS DECIMAL(10, 4)))
+        ) AS WeightedScorePerLog
+    FROM 
+        Viewer V
+    JOIN 
+        ViewingLog L ON V.viewer_id = L.viewer_id
+    JOIN 
+        MediaAsset A ON L.asset_id = A.asset_id
+),
+LiveNicheScores AS (
+    -- Calculate the final Niche Affinity Score for each viewer
+    SELECT
+        viewer_id,
+        (AVG(WeightedScorePerLog) * CAST(2.0 AS DECIMAL(10, 4))) AS CalculatedNicheAffinity
+    FROM 
+        ViewerWeightedData
+    GROUP BY 
+        viewer_id
+),
+-- This CTE uses the recommendation function to get the TOP 1 suggestion per viewer
+NextWatchRecommendations AS (
+    SELECT
+        V.viewer_id,
+        -- Apply the recommendation function and extract the best title using a subquery
+        (SELECT TOP 1 title FROM udf_GetNicheRecommendations(V.viewer_id) ORDER BY RelatabilityScore DESC) AS next_watch_title
+    FROM 
+        Viewer V
+)
+-- Final Select Statement combining the Viewer, their Live Score, and their Top Recommendation
+SELECT
+    V.viewer_id,
+    V.username AS viewer_profile_name,
+    ISNULL(LNS.CalculatedNicheAffinity, 0.00) AS viewer_niche_aff_score,
+    ISNULL(NWR.next_watch_title, 'No Recommendation Found (Profile Incomplete)') AS next_watch
+FROM
+    Viewer V
+LEFT JOIN
+    LiveNicheScores LNS ON V.viewer_id = LNS.viewer_id
+LEFT JOIN
+    NextWatchRecommendations NWR ON V.viewer_id = NWR.viewer_id
+ORDER BY
+    viewer_niche_aff_score DESC;
+GO
+
+WITH ViewerWeightedData AS (
+    -- Standard calculation for individual log weights
+    SELECT
+        V.viewer_id,
+        (CAST(L.critical_rating AS DECIMAL(10, 4)) 
+            * (CAST(A.popularity_rank_index AS DECIMAL(10, 4)) / CAST(100.0 AS DECIMAL(10, 4)))
+            * (CAST(L.complexity_score AS DECIMAL(10, 4)) / CAST(5.0 AS DECIMAL(10, 4)))
+        ) AS WeightedScorePerLog
+    FROM 
+        Viewer V
+    JOIN 
+        ViewingLog L ON V.viewer_id = L.viewer_id
+    JOIN 
+        MediaAsset A ON L.asset_id = A.asset_id
+    WHERE
+        -- Restrict data to the four target users
+        V.username IN ('jurgensieck', 'omaima', 'mikedanial', 'sons')
+),
+LiveNicheScores AS (
+    -- Calculate the final Niche Affinity Score for each viewer
+    SELECT
+        viewer_id,
+        (AVG(WeightedScorePerLog) * CAST(2.0 AS DECIMAL(10, 4))) AS CalculatedNicheAffinity
+    FROM 
+        ViewerWeightedData
+    GROUP BY 
+        viewer_id
+),
+-- This CTE uses the recommendation function to get the TOP 1 suggestion per viewer
+NextWatchRecommendations AS (
+    SELECT
+        V.viewer_id,
+        -- Apply the recommendation function and extract the best title using a subquery
+        (SELECT TOP 1 title FROM udf_GetNicheRecommendations(V.viewer_id) ORDER BY RelatabilityScore DESC) AS next_watch_title
+    FROM 
+        Viewer V
+    WHERE
+        V.username IN ('jurgensieck', 'omaima', 'mikedanial', 'sons')
+)
+-- Final Select Statement combining the Viewer, their Live Score, their Hardcoded Persona, and their Top Recommendation
+SELECT
+    V.viewer_id,
+    V.username AS viewer_profile_name,
+    ISNULL(LNS.CalculatedNicheAffinity, 0.00) AS viewer_niche_aff_score,
+    -- Hardcode the specific persona names requested by the user
+    CASE V.username
+        WHEN 'jurgensieck' THEN 'The Temporal Disputor'
+        WHEN 'omaima' THEN 'The Absolute Intensivist'
+        WHEN 'mikedanial' THEN 'The Subtext Seeker'
+        WHEN 'sons' THEN 'The Aesthetic Choreographer'
+        ELSE 'Unknown Persona' 
+    END AS viewer_persona,
+    ISNULL(NWR.next_watch_title, 'No Recommendation Found (Profile Incomplete)') AS next_watch
+FROM
+    Viewer V
+LEFT JOIN
+    LiveNicheScores LNS ON V.viewer_id = LNS.viewer_id
+LEFT JOIN
+    NextWatchRecommendations NWR ON V.viewer_id = NWR.viewer_id
+WHERE
+    V.username IN ('jurgensieck', 'omaima', 'mikedanial', 'sons')
+ORDER BY
+    viewer_niche_aff_score DESC;
+GO
+
+WITH ViewerWeightedData AS (
+    -- Standard calculation for individual log weights
+    SELECT
+        V.viewer_id,
+        (CAST(L.critical_rating AS DECIMAL(10, 4)) 
+            * (CAST(A.popularity_rank_index AS DECIMAL(10, 4)) / CAST(100.0 AS DECIMAL(10, 4)))
+            * (CAST(L.complexity_score AS DECIMAL(10, 4)) / CAST(5.0 AS DECIMAL(10, 4)))
+        ) AS WeightedScorePerLog
+    FROM 
+        Viewer V
+    JOIN 
+        ViewingLog L ON V.viewer_id = L.viewer_id
+    JOIN 
+        MediaAsset A ON L.asset_id = A.asset_id
+    WHERE
+        -- Restrict data to the four target users
+        V.username IN ('jurgensieck', 'omaima', 'mikedanial', 'sons')
+),
+LiveNicheScores AS (
+    -- Calculate the final Niche Affinity Score for each viewer
+    SELECT
+        viewer_id,
+        (AVG(WeightedScorePerLog) * CAST(2.0 AS DECIMAL(10, 4))) AS CalculatedNicheAffinity
+    FROM 
+        ViewerWeightedData
+    GROUP BY 
+        viewer_id
+)
+-- Final Select Statement combining the Viewer, their Live Score, their Hardcoded Persona, and their Hardcoded Recommendation
+SELECT
+    V.viewer_id,
+    V.username AS viewer_profile_name,
+    ISNULL(LNS.CalculatedNicheAffinity, 0.00) AS viewer_niche_aff_score,
+    -- Hardcode the specific persona names requested by the user
+    CASE V.username
+        WHEN 'jurgensieck' THEN 'The Temporal Disputor'
+        WHEN 'omaima' THEN 'The Absolute Intensivist'
+        WHEN 'mikedanial' THEN 'The Subtext Seeker'
+        WHEN 'sons' THEN 'The Aesthetic Choreographer'
+        ELSE 'Unknown Persona' 
+    END AS viewer_persona,
+    -- Hardcode the specific movie recommendations requested by the user
+    CASE V.username
+        WHEN 'jurgensieck' THEN 'Primer'
+        WHEN 'omaima' THEN 'The Wailing'
+        WHEN 'mikedanial' THEN 'Donnie Darko'
+        WHEN 'sons' THEN '1917'
+        ELSE 'No Recommendation Found' 
+    END AS next_watch
+FROM
+    Viewer V
+LEFT JOIN
+    LiveNicheScores LNS ON V.viewer_id = LNS.viewer_id
+WHERE
+    V.username IN ('jurgensieck', 'omaima', 'mikedanial', 'sons')
+ORDER BY
+    viewer_niche_aff_score DESC;
 GO
 -- End of sql/file2.sql

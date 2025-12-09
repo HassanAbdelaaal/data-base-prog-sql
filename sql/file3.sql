@@ -167,7 +167,6 @@ CREATE VIEW vw_TagPopularityAnalysis AS
 SELECT 
     ET.tag_id,
     ET.tag_name,
-    ET.category,
     ET.tag_definition,
     COUNT(DISTINCT VTV.viewer_id) AS TotalValidators,
     COUNT(DISTINCT VTV.asset_id) AS TotalMoviesTagged,
@@ -190,7 +189,6 @@ LEFT JOIN
 GROUP BY 
     ET.tag_id, 
     ET.tag_name, 
-    ET.category, 
     ET.tag_definition;
 GO
 

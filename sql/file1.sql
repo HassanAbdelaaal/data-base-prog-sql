@@ -5,8 +5,6 @@
 CREATE DATABASE CinemaCatalog_DB;
 
 USE CinemaCatalog_DB;
-
-
 --------------------------------------------------------------------------------
 -- 2. NEW ENTITY: CrewRole (For Normalization & Efficient Filtering)
 --------------------------------------------------------------------------------
@@ -78,17 +76,17 @@ CREATE TABLE MediaAsset (
     popularity_rank_index INT NOT NULL DEFAULT 0
 );
 
-INSERT INTO MediaAsset(title, release_year, media_type, runtime_minutes, budget_level) VALUES
-('The Prestige', 2006, 'Movie', 125, 'Blockbuster'),
-('Stranger Things 5', 2025, 'Series', 600, 'Blockbuster'),
-('The Godfather II', 1974, 'Movie', 170, 'Blockbuster'),
-('Interstellar', 2014, 'Movie', 125, 'Blockbuster'),
-('Moonlight', 2016, 'Movie', 111, 'Indie'),
-('Outerbanks S4', 2024, 'Series', 700, 'Mid-Budget'),
-('The Lighthouse', 2019, 'Movie', 110, 'Indie'),
-('Knives Out', 2019, 'Movie', 130, 'Mid-Budget'),
-('Baby Driver', 2017, 'Movie', 113, 'Mid-Budget'),
-('Money Heist', 2022, 'Series', 825, 'Mid-Budget')
+INSERT INTO MediaAsset(title, release_year, media_type, runtime_minutes, budget_level, popularity_rank_index) VALUES
+('The Prestige', 2006, 'Movie', 125, 'Blockbuster', 85),
+('Stranger Things 5', 2025, 'Series', 600, 'Blockbuster', 90),
+('The Godfather II', 1974, 'Movie', 170, 'Blockbuster', 95),
+('Interstellar', 2014, 'Movie', 125, 'Blockbuster', 95),
+('Moonlight', 2016, 'Movie', 111, 'Indie', 30),
+('Outerbanks S4', 2024, 'Series', 700, 'Mid-Budget', 55),
+('The Lighthouse', 2019, 'Movie', 110, 'Indie', 25),
+('Knives Out', 2019, 'Movie', 130, 'Mid-Budget', 45),
+('Baby Driver', 2017, 'Movie', 113, 'Mid-Budget', 65),
+('Money Heist', 2022, 'Series', 825, 'Mid-Budget', 70)
 
 --------------------------------------------------------------------------------
 -- 5. CORE ENTITY: CrewMember (The Talent)
@@ -167,6 +165,7 @@ INSERT INTO CrewCredit (crew_id, asset_id, role_id, is_primary_credit) VALUES
 (6, 3, 2, 0),   -- Emma Stone -> Godfather II (Lead Actor)
 (2, 4, 2, 0),   -- Ryan Gosling -> Interstellar (Lead Actor)
 (9, 9, 1, 1);   -- Edgar Wright -> Baby Driver (Director)
+(1 ,4 ,1 ,1); -- Christopher Nolan -> Interstellar (Director)  
 
 
 
@@ -235,4 +234,5 @@ INSERT INTO ViewerTagValidation (viewer_id, asset_id, tag_id, agreement_intensit
 (8, 7, 8, 2, SYSDATETIME()),
 (9, 5, 9, 5, SYSDATETIME()),
 (10, 8, 10, 3, SYSDATETIME());
+
 
